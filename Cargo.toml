@@ -1,0 +1,22 @@
+[package]
+name = "seedcore"
+version = "0.1.0"
+edition = "2021"
+description = "A deterministic microkernel simulator with capability-based isolation, synchronous IPC and user-space services, in pure std."
+license = "MIT"
+repository = "https://github.com/pavanchow/seedcore"
+readme = "README.md"
+keywords = ["microkernel", "capabilities", "ipc", "simulator", "operating-system"]
+categories = ["simulation", "os"]
+
+[[bin]]
+name = "seedcore"
+path = "src/bin/seedcore.rs"
+
+[lib]
+name = "seedcore"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
