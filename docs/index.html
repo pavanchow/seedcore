@@ -2,11 +2,518 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>seedcore</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seedcore playground</title>
+<style>
+:root {
+  --bg: #f5f5f7;
+  --panel: #ffffff;
+  --panel-2: #fbfbfd;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #d2d2d7;
+  --accent: #0071e3;
+  --accent-soft: rgba(0,113,227,0.12);
+  --ok: #1a7f37;
+  --ok-soft: rgba(26,127,55,0.12);
+  --deny: #c9252d;
+  --deny-soft: rgba(201,37,45,0.10);
+  --grant: #8a5cf6;
+  --grant-soft: rgba(138,92,246,0.12);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+/* CRITICAL: the dark block is AFTER the base body rule and re-declares BOTH the
+   variables AND the body background, so dark Chrome never shows dark on white. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --panel: #1c1c1e;
+    --panel-2: #161618;
+    --text: #f5f5f7;
+    --muted: #98989d;
+    --line: #38383a;
+    --accent: #2997ff;
+    --accent-soft: rgba(41,151,255,0.18);
+    --ok: #30d158;
+    --ok-soft: rgba(48,209,88,0.16);
+    --deny: #ff453a;
+    --deny-soft: rgba(255,69,58,0.16);
+    --grant: #bf5af2;
+    --grant-soft: rgba(191,90,242,0.18);
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.5);
+  }
+  body { background: var(--bg); color: var(--text); }
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; }
+header.hero { text-align: center; padding: 24px 0 8px; }
+.hero h1 { font-size: 44px; letter-spacing: -0.02em; margin: 0 0 8px; font-weight: 700; }
+.hero p.tag { font-size: 20px; color: var(--muted); margin: 0 auto; max-width: 640px; }
+.hero .links { margin-top: 18px; }
+a.btn-link {
+  display: inline-block; text-decoration: none; color: var(--accent);
+  font-weight: 500; padding: 8px 16px; border: 1px solid var(--line);
+  border-radius: 980px; transition: background 0.2s;
+}
+a.btn-link:hover { background: var(--accent-soft); }
+.pill {
+  display: inline-block; font-size: 13px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 980px; padding: 4px 12px; margin: 6px 4px 0;
+}
+section.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 26px; margin: 22px 0;
+}
+h2 { font-size: 26px; letter-spacing: -0.01em; margin: 0 0 4px; }
+h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; }
+button.act {
+  font-family: var(--font); font-size: 15px; font-weight: 500;
+  border: none; border-radius: 12px; padding: 12px 18px; cursor: pointer;
+  transition: transform 0.06s ease, filter 0.2s, opacity 0.2s;
+}
+button.act:active { transform: scale(0.97); }
+button.act:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #fff; }
+button.danger { background: var(--deny-soft); color: var(--deny); border: 1px solid var(--deny); }
+button.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+button.primary:hover:not(:disabled) { filter: brightness(1.06); }
+
+.stage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 8px; }
+.node {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px; transition: box-shadow 0.25s, border-color 0.25s, transform 0.25s;
+}
+.node.flash { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); transform: translateY(-2px); }
+.node.deny-flash { border-color: var(--deny); box-shadow: 0 0 0 3px var(--deny-soft); }
+.node .role { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.node .name { font-size: 18px; font-weight: 600; margin: 2px 0 10px; }
+.node .name .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 980px; margin-left: 6px; vertical-align: middle; }
+.badge.svc { background: var(--grant-soft); color: var(--grant); }
+.badge.usr { background: var(--accent-soft); color: var(--accent); }
+.caplist { list-style: none; padding: 0; margin: 0; }
+.caplist li {
+  font-family: var(--mono); font-size: 12px; margin: 5px 0; padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  display: flex; justify-content: space-between; gap: 8px; transition: background 0.25s;
+}
+.caplist li.new { background: var(--grant-soft); }
+.rights { color: var(--muted); }
+.rights .r-grant { color: var(--grant); }
+.mem { margin-top: 12px; }
+.mem .memlabel { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.cells { display: flex; gap: 3px; flex-wrap: wrap; }
+.cell {
+  width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--line);
+  background: var(--panel); font-family: var(--mono); font-size: 10px;
+  display: flex; align-items: center; justify-content: center; color: var(--muted);
+  transition: background 0.3s, color 0.3s, transform 0.3s;
+}
+.cell.set { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.cell.pulse { transform: scale(1.18); }
+.shared-tag { font-size: 11px; color: var(--grant); font-weight: 600; }
+
+.timeline { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 40px; }
+.tick {
+  font-family: var(--mono); font-size: 11px; padding: 6px 9px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2); white-space: nowrap;
+  animation: pop 0.25s ease;
+}
+.tick.fs { border-color: var(--grant); color: var(--grant); }
+.tick.con { border-color: var(--grant); color: var(--grant); }
+.tick.app { border-color: var(--accent); color: var(--accent); }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.log { font-family: var(--mono); font-size: 12.5px; margin: 0; padding: 0; list-style: none; max-height: 340px; overflow-y: auto; }
+.log li { padding: 4px 2px; border-bottom: 1px solid var(--line); animation: fade 0.25s ease; }
+.log li:last-child { border-bottom: none; }
+.log .ev-ipc { color: var(--accent); }
+.log .ev-grant { color: var(--grant); }
+.log .ev-mem { color: var(--ok); }
+.log .ev-deny { color: var(--deny); font-weight: 600; }
+.log .ev-sched { color: var(--muted); }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.how ol { margin: 0; padding-left: 20px; }
+.how li { margin: 8px 0; }
+.how code { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+@media (max-width: 820px) {
+  .stage { grid-template-columns: 1fr; }
+  .grid2 { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 34px; }
+}
+</style>
 </head>
 <body>
-<h1>seedcore</h1>
-<p>Site coming soon.</p>
-<p><a href="https://github.com/pavanchow/seedcore">View repository</a></p>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Seedcore</h1>
+    <p class="tag">A deterministic microkernel, in your browser. A tiny core hands out threads, address spaces, synchronous IPC, and capabilities. Everything else is an unprivileged user space service.</p>
+    <div class="links">
+      <a class="btn-link" href="https://github.com/pavanchow/seedcore">View the repository</a>
+    </div>
+    <div>
+      <span class="pill">capability based isolation</span>
+      <span class="pill">synchronous IPC</span>
+      <span class="pill">user space services</span>
+      <span class="pill">teaching accurate model</span>
+    </div>
+  </header>
+
+  <section class="card how">
+    <h2>How to use this playground</h2>
+    <p class="sub">This is a faithful reimplementation of the Seedcore engine, small enough to read. The three boxes below are tasks. The filesystem and console are ordinary user space services. The app is a client. Watch what each is allowed to do, and what the core denies.</p>
+    <ol>
+      <li><b>Send a file request.</b> Press <code>Send file request</code>. The app sends a request to the filesystem service over its endpoint, handing it a one shot reply capability inside the message. The filesystem writes the file bytes into a region shared with the app, replies, and the app reads the bytes back. Watch the boxes light up, the shared memory fill, and the scheduler timeline grow.</li>
+      <li><b>Try an unauthorized access.</b> Press <code>Try unauthorized access</code>. The app names a capability slot it was never granted. There is no such capability, so the core denies it. The denial appears in red and the app box flashes red.</li>
+      <li><b>Try a type confusion.</b> Press <code>Send on a memory capability</code>. The app tries to send a message using a memory capability where an endpoint is required. The core refuses the wrong object kind.</li>
+      <li><b>Read the state.</b> Each box lists its capability tokens as <code>slot: object [rights]</code>. A capability transferred over IPC appears highlighted in the receiver. The shared region shows which tasks can see it.</li>
+      <li><b>Reset</b> to start over. Everything here is deterministic, so the same buttons always produce the same trace.</li>
+    </ol>
+    <p class="sub" style="margin-top:16px"><b>Guided tour.</b> Start with <code>Send file request</code> and read the event log top to bottom. Notice the <span style="color:var(--grant);font-weight:600">cap transfer</span> line: that is the reply capability moving from the app into the filesystem. Then press <code>Try unauthorized access</code> and see that naming a slot is not the same as holding one. That single idea, that authority is a token you must hold and cannot forge, is the whole point of a capability microkernel.</p>
+  </section>
+
+  <section class="card">
+    <h2>The system</h2>
+    <p class="sub">Three tasks, their capabilities, and their address spaces.</p>
+    <div class="controls" style="margin-bottom:20px">
+      <button class="act primary" id="btn-ipc">Send file request</button>
+      <button class="act danger" id="btn-deny">Try unauthorized access</button>
+      <button class="act danger" id="btn-type">Send on a memory capability</button>
+      <button class="act ghost" id="btn-reset">Reset</button>
+    </div>
+    <div class="stage" id="stage"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Scheduler timeline</h2>
+      <p class="sub">Round robin dispatch order. Each chip is one dispatched thread step.</p>
+      <div class="timeline" id="timeline"></div>
+    </section>
+    <section class="card">
+      <h2>Event trace</h2>
+      <p class="sub">Every effect the core records, in order.</p>
+      <ul class="log" id="log"></ul>
+    </section>
+  </div>
+
+  <footer>
+    Seedcore is a teaching accurate microkernel simulator, not a bootable kernel. Source and the full Rust engine at
+    <a class="btn-link" style="padding:2px 10px" href="https://github.com/pavanchow/seedcore">github.com/pavanchow/seedcore</a>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+// A compact, faithful reimplementation of the Seedcore model. Capabilities are
+// slots into a per task table. Nothing can be touched without a held capability,
+// and a slot that was never granted resolves to nothing.
+
+const RIGHTS = { SEND:1, RECV:2, GRANT:4, READ:8, WRITE:16 };
+function rightsText(r) {
+  const parts = [];
+  if (r & RIGHTS.SEND) parts.push("send");
+  if (r & RIGHTS.RECV) parts.push("recv");
+  if (r & RIGHTS.GRANT) parts.push('<span class="r-grant">grant</span>');
+  if (r & RIGHTS.READ) parts.push("read");
+  if (r & RIGHTS.WRITE) parts.push("write");
+  return parts.length ? parts.join("|") : "none";
+}
+
+function freshState() {
+  // Regions.
+  const regions = {
+    shared:  { id: 0, len: 8, bytes: new Array(8).fill(null), sharedBy: ["app", "fs"] },
+    fsPriv:  { id: 1, len: 8, bytes: new Array(8).fill(null), sharedBy: ["fs"] },
+    appPriv: { id: 2, len: 8, bytes: new Array(8).fill(null), sharedBy: ["app"] },
+  };
+  // Tasks with capability tables. Slots are handed out in order and never reused.
+  const tasks = {
+    fs: {
+      name: "filesystem", role: "user space service", kind: "svc", nextSlot: 0,
+      caps: [], // filled below
+    },
+    con: {
+      name: "console", role: "user space service", kind: "svc", nextSlot: 0,
+      caps: [],
+    },
+    app: {
+      name: "app", role: "client task", kind: "usr", nextSlot: 0,
+      caps: [],
+    },
+  };
+  function grant(t, object, rights) {
+    const slot = tasks[t].nextSlot++;
+    tasks[t].caps.push({ slot, object, rights, isNew: false });
+    return slot;
+  }
+  // Filesystem: receive on its endpoint, read and write shared and private.
+  grant("fs", { kind: "endpoint", id: "fs_ep", label: "fs endpoint" }, RIGHTS.RECV);
+  grant("fs", { kind: "region", id: "shared", label: "shared region" }, RIGHTS.READ | RIGHTS.WRITE);
+  grant("fs", { kind: "region", id: "fsPriv", label: "fs private" }, RIGHTS.READ | RIGHTS.WRITE);
+  // Console: receive on its endpoint.
+  grant("con", { kind: "endpoint", id: "con_ep", label: "console endpoint" }, RIGHTS.RECV);
+  // App: send to fs, keep + give a reply cap, read/write shared, send to console.
+  grant("app", { kind: "endpoint", id: "fs_ep", label: "fs endpoint" }, RIGHTS.SEND);        // slot 0
+  grant("app", { kind: "endpoint", id: "reply_ep", label: "reply endpoint" }, RIGHTS.RECV);  // slot 1
+  grant("app", { kind: "endpoint", id: "reply_ep", label: "reply endpoint" }, RIGHTS.SEND | RIGHTS.GRANT); // slot 2
+  grant("app", { kind: "region", id: "shared", label: "shared region" }, RIGHTS.READ | RIGHTS.WRITE); // slot 3
+  grant("app", { kind: "endpoint", id: "con_ep", label: "console endpoint" }, RIGHTS.SEND);  // slot 4
+  grant("app", { kind: "region", id: "appPriv", label: "app private" }, RIGHTS.READ | RIGHTS.WRITE); // slot 5
+  return { regions, tasks, timeline: [], log: [], busy: false };
+}
+
+let S = freshState();
+
+// -- rendering ---------------------------------------------------------------
+
+const stageEl = document.getElementById("stage");
+const timelineEl = document.getElementById("timeline");
+const logEl = document.getElementById("log");
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function render() {
+  stageEl.innerHTML = "";
+  for (const key of ["fs", "con", "app"]) {
+    const t = S.tasks[key];
+    const node = el("div", "node");
+    node.id = "node-" + key;
+    node.appendChild(el("div", "role", t.role));
+    const badge = t.kind === "svc"
+      ? '<span class="badge svc">service</span>'
+      : '<span class="badge usr">unprivileged</span>';
+    node.appendChild(el("div", "name", t.name + badge));
+
+    const cl = el("ul", "caplist");
+    for (const c of t.caps) {
+      const li = el("li", c.isNew ? "new" : "");
+      li.appendChild(el("span", null, "slot " + c.slot + ": " + c.object.label));
+      li.appendChild(el("span", "rights", "[" + rightsText(c.rights) + "]"));
+      cl.appendChild(li);
+    }
+    if (t.caps.length === 0) cl.appendChild(el("li", null, "(no capabilities)"));
+    node.appendChild(cl);
+
+    // Address space: regions this task can reach.
+    const seen = new Set(t.caps.filter(c => c.object.kind === "region").map(c => c.object.id));
+    for (const rid of seen) {
+      const region = S.regions[rid];
+      const wrap = el("div", "mem");
+      const shared = region.sharedBy.length > 1
+        ? ' <span class="shared-tag">shared</span>' : "";
+      wrap.appendChild(el("div", "memlabel", region === S.regions.shared ? "shared region" + shared : rid + shared));
+      const cells = el("div", "cells");
+      for (let i = 0; i < region.len; i++) {
+        const cell = el("div", "cell" + (region.bytes[i] !== null ? " set" : ""));
+        cell.id = "cell-" + key + "-" + rid + "-" + i;
+        cell.textContent = region.bytes[i] !== null
+          ? region.bytes[i].toString(16).padStart(2, "0") : "";
+        cells.appendChild(cell);
+      }
+      wrap.appendChild(cells);
+      node.appendChild(wrap);
+    }
+    stageEl.appendChild(node);
+  }
+  renderTimeline();
+  renderLog();
+}
+
+function renderTimeline() {
+  timelineEl.innerHTML = "";
+  if (S.timeline.length === 0) {
+    timelineEl.appendChild(el("span", "sub", "Press a button to run the scheduler."));
+    return;
+  }
+  S.timeline.forEach((step, i) => {
+    timelineEl.appendChild(el("span", "tick " + step.task, "t" + (i + 1) + " " + step.text));
+  });
+}
+
+function renderLog() {
+  logEl.innerHTML = "";
+  if (S.log.length === 0) {
+    logEl.appendChild(el("li", "ev-sched", "Idle. The system is booted and capabilities are distributed."));
+    return;
+  }
+  for (const line of S.log) {
+    logEl.appendChild(el("li", line.cls, line.text));
+  }
+}
+
+// -- animation helpers -------------------------------------------------------
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function flash(key, deny) {
+  const n = document.getElementById("node-" + key);
+  if (!n) return;
+  n.classList.add(deny ? "deny-flash" : "flash");
+  setTimeout(() => n.classList.remove(deny ? "deny-flash" : "flash"), 650);
+}
+
+function logLine(text, cls) { S.log.push({ text, cls }); renderLog(); logEl.scrollTop = logEl.scrollHeight; }
+function tick(task, text) { S.timeline.push({ task, text }); renderTimeline(); }
+
+function setButtons(disabled) {
+  for (const id of ["btn-ipc", "btn-deny", "btn-type", "btn-reset"]) {
+    document.getElementById(id).disabled = disabled;
+  }
+}
+
+// -- the scenarios -----------------------------------------------------------
+
+async function runFileRequest() {
+  if (S.busy) return;
+  S.busy = true; setButtons(true);
+
+  tick("fs", "fs recv (block)");
+  logLine("[t1] dispatch filesystem: recv fs endpoint, blocks waiting", "ev-sched");
+  await sleep(320);
+
+  tick("con", "con recv (block)");
+  logLine("[t2] dispatch console: recv console endpoint, blocks waiting", "ev-sched");
+  await sleep(320);
+
+  tick("app", "app compute");
+  logLine("[t3] dispatch app: compute", "ev-sched");
+  flash("app");
+  await sleep(320);
+
+  tick("app", "app send + cap");
+  flash("app");
+  logLine("app send to fs endpoint, label=read:/hello, transfers reply capability", "ev-ipc");
+  await sleep(260);
+  flash("fs");
+  logLine("IPC rendezvous: app to filesystem over fs endpoint", "ev-ipc");
+  // Capability transfer: the reply cap (app slot 2) moves into the filesystem.
+  const idx = S.tasks.app.caps.findIndex(c => c.slot === 2);
+  const moved = S.tasks.app.caps.splice(idx, 1)[0];
+  const newSlot = S.tasks.fs.nextSlot++;
+  S.tasks.fs.caps.push({ slot: newSlot, object: moved.object, rights: moved.rights, isNew: true });
+  logLine("cap transfer: reply endpoint [send] app to filesystem, into slot " + newSlot, "ev-grant");
+  render();
+  await sleep(360);
+
+  tick("fs", "fs compute");
+  flash("fs");
+  logLine("[t5] dispatch filesystem: compute (simulate disk)", "ev-sched");
+  await sleep(300);
+
+  // Filesystem writes the file bytes into the shared region.
+  tick("fs", "fs write shared[0]");
+  await writeShared(0, 0x48, "fs"); // 'H'
+  tick("fs", "fs write shared[1]");
+  await writeShared(1, 0x49, "fs"); // 'I'
+
+  tick("fs", "fs reply");
+  flash("fs");
+  await sleep(200);
+  flash("app");
+  logLine("filesystem reply over the one shot reply capability, which is then destroyed", "ev-ipc");
+  // Consume the reply cap in the filesystem.
+  const rIdx = S.tasks.fs.caps.findIndex(c => c.slot === newSlot);
+  if (rIdx >= 0) S.tasks.fs.caps.splice(rIdx, 1);
+  render();
+  await sleep(320);
+
+  tick("app", "app read shared[0]");
+  await readShared(0, "app");
+  tick("app", "app read shared[1]");
+  await readShared(1, "app");
+
+  tick("app", "app send console");
+  flash("app"); await sleep(160); flash("con");
+  logLine("IPC rendezvous: app to console, label=print HI", "ev-ipc");
+  await sleep(280);
+
+  logLine("done: the app read a file and printed it, entirely over IPC to user space services", "ev-mem");
+  S.busy = false; setButtons(false);
+}
+
+async function writeShared(offset, value, actor) {
+  S.regions.shared.bytes[offset] = value;
+  render();
+  const cell = document.getElementById("cell-" + actor + "-shared-" + offset);
+  if (cell) { cell.classList.add("pulse"); setTimeout(() => cell.classList.remove("pulse"), 300); }
+  logLine(actor + " write shared region[" + offset + "] = 0x" + value.toString(16), "ev-mem");
+  await sleep(300);
+}
+
+async function readShared(offset, actor) {
+  const v = S.regions.shared.bytes[offset];
+  const cell = document.getElementById("cell-" + actor + "-shared-" + offset);
+  if (cell) { cell.classList.add("pulse"); setTimeout(() => cell.classList.remove("pulse"), 300); }
+  const hex = v === null ? "0x00" : "0x" + v.toString(16);
+  logLine(actor + " read shared region[" + offset + "] = " + hex + " (shared via a granted capability)", "ev-mem");
+  await sleep(300);
+}
+
+async function runUnauthorized() {
+  if (S.busy) return;
+  S.busy = true; setButtons(true);
+  tick("app", "app read slot 99");
+  flash("app", true);
+  const held = S.tasks.app.caps.some(c => c.slot === 99);
+  logLine("app read: names capability slot 99, which it was never granted", "ev-sched");
+  await sleep(300);
+  logLine("DENIED: no capability in slot 99. Naming a slot is not holding one.", "ev-deny");
+  flash("app", true);
+  S.busy = false; setButtons(false);
+  void held;
+}
+
+async function runTypeConfusion() {
+  if (S.busy) return;
+  S.busy = true; setButtons(true);
+  tick("app", "app send slot 3");
+  flash("app", true);
+  logLine("app send: uses slot 3, a memory capability, where an endpoint is required", "ev-sched");
+  await sleep(300);
+  logLine("DENIED: slot 3 is not an endpoint capability. The core refuses the type confusion.", "ev-deny");
+  flash("app", true);
+  S.busy = false; setButtons(false);
+}
+
+function reset() {
+  if (S.busy) return;
+  S = freshState();
+  render();
+}
+
+document.getElementById("btn-ipc").addEventListener("click", runFileRequest);
+document.getElementById("btn-deny").addEventListener("click", runUnauthorized);
+document.getElementById("btn-type").addEventListener("click", runTypeConfusion);
+document.getElementById("btn-reset").addEventListener("click", reset);
+
+render();
+</script>
 </body>
 </html>
