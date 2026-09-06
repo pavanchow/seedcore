@@ -21,6 +21,14 @@ use std::fmt;
 /// task ever sees or names.
 pub type CapSlot = u32;
 
+/// A globally unique identity for a minted capability, independent of which slot
+/// or task currently holds it. Two slots that name the same object are still
+/// distinct capabilities with distinct ids, and an id survives being transferred
+/// between tasks over IPC. This identity is what the capability derivation tree
+/// is keyed on, so that revoking one capability can find every capability minted
+/// from it no matter where it has travelled.
+pub type CapId = u64;
+
 /// A kernel object a capability can point at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectRef {
@@ -162,14 +170,25 @@ impl fmt::Display for Capability {
     }
 }
 
+/// A live table entry: a capability plus the global identity it was minted with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CapEntry {
+    /// The capability itself.
+    pub cap: Capability,
+    /// The identity used by the derivation tree.
+    pub id: CapId,
+}
+
 /// A per task table mapping slots to capabilities.
 ///
 /// The table owns the invariant that makes capabilities unforgeable. New slots
 /// come from a counter that only ever increases, so a slot is unique for the
-/// life of the table and a removed slot is gone for good.
+/// life of the table and a removed slot is gone for good. Alongside the object
+/// and rights, each entry carries a globally unique [`CapId`] assigned by the
+/// kernel, which the derivation tree uses to track descent.
 #[derive(Debug, Clone, Default)]
 pub struct CapTable {
-    slots: BTreeMap<CapSlot, Capability>,
+    slots: BTreeMap<CapSlot, CapEntry>,
     next: CapSlot,
 }
 
@@ -182,25 +201,36 @@ impl CapTable {
         }
     }
 
-    /// Install a capability and return the slot it landed in. This is the only
-    /// way an entry ever enters a table, and it is kernel only.
-    pub fn install(&mut self, cap: Capability) -> CapSlot {
+    /// Install a capability with its kernel assigned identity and return the slot
+    /// it landed in. This is the only way an entry ever enters a table, and it is
+    /// kernel only.
+    pub fn install(&mut self, cap: Capability, id: CapId) -> CapSlot {
         let slot = self.next;
         self.next += 1;
-        self.slots.insert(slot, cap);
+        self.slots.insert(slot, CapEntry { cap, id });
         slot
     }
 
-    /// Look up a slot. `None` means the slot was never granted or was revoked,
-    /// which the kernel turns into a denial.
+    /// Look up the capability in a slot. `None` means the slot was never granted
+    /// or was revoked, which the kernel turns into a denial.
     pub fn get(&self, slot: CapSlot) -> Option<Capability> {
+        self.slots.get(&slot).map(|e| e.cap)
+    }
+
+    /// Look up the full entry, capability and identity, in a slot.
+    pub fn entry(&self, slot: CapSlot) -> Option<CapEntry> {
         self.slots.get(&slot).copied()
+    }
+
+    /// The derivation identity of the capability in a slot, if any.
+    pub fn id_of(&self, slot: CapSlot) -> Option<CapId> {
+        self.slots.get(&slot).map(|e| e.id)
     }
 
     /// Remove a slot, returning the capability that was there. Used by capability
     /// transfer (move out of the sender) and by explicit revocation.
     pub fn remove(&mut self, slot: CapSlot) -> Option<Capability> {
-        self.slots.remove(&slot)
+        self.slots.remove(&slot).map(|e| e.cap)
     }
 
     /// Whether a slot currently holds a capability.
@@ -227,7 +257,13 @@ impl CapTable {
 
     /// Iterate the live entries in slot order.
     pub fn iter(&self) -> impl Iterator<Item = (CapSlot, Capability)> + '_ {
-        self.slots.iter().map(|(slot, cap)| (*slot, *cap))
+        self.slots.iter().map(|(slot, entry)| (*slot, entry.cap))
+    }
+
+    /// Iterate the live entries in slot order, including their identities. Used
+    /// by transitive revocation to find every slot descended from a capability.
+    pub fn iter_entries(&self) -> impl Iterator<Item = (CapSlot, CapEntry)> + '_ {
+        self.slots.iter().map(|(slot, entry)| (*slot, *entry))
     }
 }
 
@@ -238,9 +274,9 @@ mod tests {
     #[test]
     fn slots_are_never_reused() {
         let mut t = CapTable::new();
-        let a = t.install(Capability::new(ObjectRef::Endpoint(0), Rights::SEND));
+        let a = t.install(Capability::new(ObjectRef::Endpoint(0), Rights::SEND), 0);
         t.remove(a);
-        let b = t.install(Capability::new(ObjectRef::Endpoint(0), Rights::SEND));
+        let b = t.install(Capability::new(ObjectRef::Endpoint(0), Rights::SEND), 1);
         assert_ne!(a, b, "a revoked slot must never be handed out again");
         assert!(!t.contains(a));
         assert!(t.contains(b));
@@ -267,8 +303,8 @@ mod tests {
     #[test]
     fn high_water_marks_absent_slots() {
         let mut t = CapTable::new();
-        for _ in 0..5 {
-            t.install(Capability::new(ObjectRef::Region(0), Rights::READ));
+        for i in 0..5 {
+            t.install(Capability::new(ObjectRef::Region(0), Rights::READ), i);
         }
         let hw = t.high_water();
         assert!(!t.contains(hw));

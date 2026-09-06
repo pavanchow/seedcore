@@ -68,6 +68,9 @@ pub enum ThreadState {
 pub(crate) struct PendingCap {
     pub object: crate::capability::ObjectRef,
     pub rights: crate::capability::Rights,
+    /// The derivation identity, preserved so the capability stays the same one
+    /// after the move and remains reachable by transitive revocation.
+    pub id: crate::capability::CapId,
 }
 
 /// A message that a blocked sender is holding, fully resolved.

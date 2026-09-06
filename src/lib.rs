@@ -41,6 +41,26 @@
 //! assert!(report.rendezvous >= 1);
 //! ```
 
+#![warn(clippy::pedantic)]
+// A teaching simulator of small, bounded objects. The lints below are silenced
+// deliberately, not because a finding was hard to fix:
+//   - the accessors are tiny and pervasive, so must_use on every one is noise,
+//   - Rights combinators return Self by value as value types are meant to,
+//   - every width cast is on a value bounded by the simulation size, never user
+//     input, so truncation and sign loss cannot actually occur,
+//   - the op interpreter is one cohesive match that reads best in one place, and
+//   - the internal unwraps encode kernel invariants: a panic there is a kernel
+//     bug, not a caller error, so documenting it as an API panic would mislead.
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::missing_panics_doc)]
+
 pub mod capability;
 pub mod error;
 pub mod ipc;
@@ -52,7 +72,7 @@ pub mod scheduler;
 pub mod thread;
 pub mod trace;
 
-pub use capability::{Capability, CapSlot, CapTable, ObjectRef, Rights};
+pub use capability::{CapEntry, CapId, CapSlot, CapTable, Capability, ObjectRef, Rights};
 pub use error::KernelError;
 pub use ipc::{Endpoint, MsgSpec};
 pub use kernel::{Kernel, RunReport};
@@ -73,7 +93,7 @@ pub type RegionId = u32;
 
 /// The everyday imports for building and running a scenario.
 pub mod prelude {
-    pub use crate::capability::{Capability, CapSlot, ObjectRef, Rights};
+    pub use crate::capability::{CapId, CapSlot, Capability, ObjectRef, Rights};
     pub use crate::error::KernelError;
     pub use crate::ipc::MsgSpec;
     pub use crate::kernel::{Kernel, RunReport};

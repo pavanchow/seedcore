@@ -15,7 +15,7 @@
 //! makes the security properties hold by construction rather than by careful
 //! checking scattered everywhere.
 
-use crate::capability::{CapSlot, CapTable, Capability, ObjectRef, Rights};
+use crate::capability::{CapId, CapSlot, CapTable, Capability, ObjectRef, Rights};
 use crate::error::KernelError;
 use crate::ipc::{Endpoint, MsgSpec};
 use crate::memory::Region;
@@ -24,7 +24,7 @@ use crate::scheduler::{Policy, Scheduler};
 use crate::thread::{Op, PendingCap, PendingMsg, Thread, ThreadState};
 use crate::trace::Event;
 use crate::{EndpointId, RegionId, TaskId, ThreadId};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A task: an address space, a capability table, and its threads.
 ///
@@ -93,6 +93,11 @@ pub struct Kernel {
     next_thread: ThreadId,
     next_endpoint: EndpointId,
     next_region: RegionId,
+    next_cap_id: CapId,
+    /// The capability derivation tree: each minted capability maps to the parent
+    /// it was derived from, or `None` for a root capability created by a grant.
+    /// Revoking a capability walks this tree to reach every descendant.
+    cdt: BTreeMap<CapId, Option<CapId>>,
 }
 
 impl Kernel {
@@ -116,7 +121,18 @@ impl Kernel {
             next_thread: 0,
             next_endpoint: 0,
             next_region: 0,
+            next_cap_id: 0,
+            cdt: BTreeMap::new(),
         }
+    }
+
+    /// Allocate a fresh globally unique capability identity and record its parent
+    /// in the derivation tree.
+    fn mint_id(&mut self, parent: Option<CapId>) -> CapId {
+        let id = self.next_cap_id;
+        self.next_cap_id += 1;
+        self.cdt.insert(id, parent);
+        id
     }
 
     // -- object creation, all kernel privileged ------------------------------
@@ -159,18 +175,119 @@ impl Kernel {
     /// operation that creates authority from nothing, and it is available only
     /// to whoever drives the kernel, never to a task from inside its program.
     pub fn grant(&mut self, task: TaskId, object: ObjectRef, rights: Rights) -> CapSlot {
+        let id = self.mint_id(None);
         let table = &mut self
             .tasks
             .get_mut(&task)
             .expect("grant into a real task")
             .caps;
-        table.install(Capability::new(object, rights))
+        table.install(Capability::new(object, rights), id)
     }
 
-    /// Revoke a capability slot from a task. A revoked slot is gone for good and
-    /// any later use of that slot number is denied.
+    /// Mint a derived capability from one a task already holds, with rights no
+    /// stronger than the source, and install it into a target task. This is
+    /// capability delegation: authority flows downward and can only ever narrow.
+    /// `drop_mask` names the rights to strip, so the child carries
+    /// `source.rights.minus(drop_mask)` and never more. The child is recorded as
+    /// a descendant of the source in the derivation tree, so revoking the source
+    /// later revokes this child too. Returns the new slot and the rights it
+    /// actually carries.
+    ///
+    /// Minting is a privileged operation exposed to whoever drives the kernel,
+    /// modelling a task asking the core to delegate. A task can never mint from a
+    /// capability it does not hold: an absent source slot is a denial.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KernelError::NoSuchObject`] if either task does not exist, and
+    /// [`KernelError::NoSuchCapability`] if the source slot is empty, fabricated,
+    /// or revoked.
+    pub fn mint(
+        &mut self,
+        from: TaskId,
+        src_slot: CapSlot,
+        to: TaskId,
+        drop_mask: Rights,
+    ) -> Result<(CapSlot, Rights), KernelError> {
+        let src = self
+            .tasks
+            .get(&from)
+            .ok_or(KernelError::NoSuchObject {
+                object: ObjectRef::Task(from),
+            })?
+            .caps
+            .entry(src_slot)
+            .ok_or(KernelError::NoSuchCapability { slot: src_slot })?;
+        let child_rights = src.cap.rights.minus(drop_mask);
+        let id = self.mint_id(Some(src.id));
+        let slot = self
+            .tasks
+            .get_mut(&to)
+            .ok_or(KernelError::NoSuchObject {
+                object: ObjectRef::Task(to),
+            })?
+            .caps
+            .install(Capability::new(src.cap.object, child_rights), id);
+        Ok((slot, child_rights))
+    }
+
+    /// Revoke a single capability slot from a task. A revoked slot is gone for
+    /// good and any later use of that slot number is denied. This does not touch
+    /// capabilities derived from it. For transitive revocation use
+    /// [`Kernel::revoke_tree`].
     pub fn revoke(&mut self, task: TaskId, slot: CapSlot) -> Option<Capability> {
         self.tasks.get_mut(&task).and_then(|t| t.caps.remove(slot))
+    }
+
+    /// The derivation identity of the capability held at a task slot, if any.
+    pub fn cap_id(&self, task: TaskId, slot: CapSlot) -> Option<CapId> {
+        self.tasks.get(&task).and_then(|t| t.caps.id_of(slot))
+    }
+
+    /// Transitively revoke a capability and everything ever derived from it,
+    /// wherever those descendants now live. This walks the derivation tree from
+    /// the named slot, collects the whole subtree of identities, and removes
+    /// every matching capability from every task table in the system. It is the
+    /// operation that makes delegation safe: handing out a minted capability
+    /// never costs the granter the ability to take it all back at once. Returns
+    /// the number of capabilities removed.
+    pub fn revoke_tree(&mut self, task: TaskId, slot: CapSlot) -> usize {
+        let Some(root) = self.cap_id(task, slot) else {
+            return 0;
+        };
+        // Collect the root and all its transitive descendants.
+        let mut doomed: BTreeSet<CapId> = BTreeSet::new();
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            if !doomed.insert(id) {
+                continue;
+            }
+            for (&child, &parent) in &self.cdt {
+                if parent == Some(id) {
+                    stack.push(child);
+                }
+            }
+        }
+        // Remove every capability whose identity is doomed, from every task.
+        let mut removed = 0usize;
+        for t in self.tasks.values_mut() {
+            let hit: Vec<CapSlot> = t
+                .caps
+                .iter_entries()
+                .filter(|(_, e)| doomed.contains(&e.id))
+                .map(|(s, _)| s)
+                .collect();
+            for s in hit {
+                t.caps.remove(s);
+                removed += 1;
+            }
+        }
+        // Drop the revoked identities from the tree so it cannot grow without
+        // bound and so a stale id can never be revoked twice.
+        for id in &doomed {
+            self.cdt.remove(id);
+        }
+        removed
     }
 
     /// Spawn a thread in a task and make it ready to run.
@@ -199,6 +316,12 @@ impl Kernel {
     /// slot (fabricated, guessed, or revoked), a wrong object kind, or a missing
     /// right. This single function is the choke point for all authority in the
     /// system.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`KernelError`] describing the denial: the task or slot is
+    /// absent, the capability names the wrong kind of object, or it lacks a
+    /// required right.
     pub fn resolve(
         &self,
         task: TaskId,
@@ -232,6 +355,11 @@ impl Kernel {
 
     /// Read one byte through a memory capability. Denied unless the calling
     /// thread task holds a region capability with the read right for the target.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`KernelError`] if the capability does not resolve to a readable
+    /// region or the offset is out of bounds.
     pub fn sys_read(
         &self,
         thread: ThreadId,
@@ -251,6 +379,11 @@ impl Kernel {
 
     /// Write one byte through a memory capability. Denied unless the calling
     /// thread task holds a region capability with the write right for the target.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`KernelError`] if the capability does not resolve to a writable
+    /// region or the offset is out of bounds.
     pub fn sys_write(
         &mut self,
         thread: ThreadId,
@@ -322,13 +455,10 @@ impl Kernel {
 
     /// Execute the current op of a running thread.
     fn step(&mut self, tid: ThreadId) -> Outcome {
-        let op = match self.threads.get(&tid).and_then(|t| t.current_op()).cloned() {
-            Some(op) => op,
-            None => {
-                self.threads.get_mut(&tid).unwrap().state = ThreadState::Exited;
-                self.trace.push(Event::Exit { thread: tid });
-                return Outcome::Exited;
-            }
+        let Some(op) = self.threads.get(&tid).and_then(|t| t.current_op()).cloned() else {
+            self.threads.get_mut(&tid).unwrap().state = ThreadState::Exited;
+            self.trace.push(Event::Exit { thread: tid });
+            return Outcome::Exited;
         };
         match op {
             Op::Compute(cycles) => {
@@ -375,14 +505,12 @@ impl Kernel {
             }
             Op::Send { ep, msg } => self.do_send(tid, ep, msg, false),
             Op::Reply { msg } => {
-                let slot = self.threads[&tid].reply_to;
-                match slot {
-                    Some(slot) => self.do_send(tid, slot, msg, true),
-                    None => {
-                        self.deny(tid, "reply", KernelError::NoReplyCapability);
-                        self.threads.get_mut(&tid).unwrap().pc += 1;
-                        Outcome::Advanced
-                    }
+                if let Some(slot) = self.threads[&tid].reply_to {
+                    self.do_send(tid, slot, msg, true)
+                } else {
+                    self.deny(tid, "reply", KernelError::NoReplyCapability);
+                    self.threads.get_mut(&tid).unwrap().pc += 1;
+                    Outcome::Advanced
                 }
             }
             Op::Recv { ep } => self.do_recv(tid, ep),
@@ -414,12 +542,13 @@ impl Kernel {
         // permitted to delegate, and it cannot transfer a slot it does not hold.
         let pending_cap = match msg.transfer {
             None => None,
-            Some(slot) => match self.tasks.get(&task).and_then(|t| t.caps.get(slot)) {
-                Some(cap) if cap.rights.contains(Rights::GRANT) => {
+            Some(slot) => match self.tasks.get(&task).and_then(|t| t.caps.entry(slot)) {
+                Some(entry) if entry.cap.rights.contains(Rights::GRANT) => {
                     self.tasks.get_mut(&task).unwrap().caps.remove(slot);
                     Some(PendingCap {
-                        object: cap.object,
-                        rights: cap.rights,
+                        object: entry.cap.object,
+                        rights: entry.cap.rights,
+                        id: entry.id,
                     })
                 }
                 Some(_) => {
@@ -457,23 +586,20 @@ impl Kernel {
             .endpoints
             .get_mut(&ep_id)
             .and_then(|ep| ep.receivers.pop_front());
-        match waiting_receiver {
-            Some(receiver) => {
-                self.deliver(tid, receiver, ep_id, pending, receiver);
-                self.threads.get_mut(&tid).unwrap().pc += 1;
-                Outcome::Advanced
-            }
-            None => {
-                self.endpoints.get_mut(&ep_id).unwrap().senders.push_back(tid);
-                let t = self.threads.get_mut(&tid).unwrap();
-                t.state = ThreadState::BlockedSend(ep_id);
-                t.pending = Some(pending);
-                self.trace.push(Event::BlockSend {
-                    thread: tid,
-                    endpoint: ep_id,
-                });
-                Outcome::Blocked
-            }
+        if let Some(receiver) = waiting_receiver {
+            self.deliver(tid, receiver, ep_id, pending, receiver);
+            self.threads.get_mut(&tid).unwrap().pc += 1;
+            Outcome::Advanced
+        } else {
+            self.endpoints.get_mut(&ep_id).unwrap().senders.push_back(tid);
+            let t = self.threads.get_mut(&tid).unwrap();
+            t.state = ThreadState::BlockedSend(ep_id);
+            t.pending = Some(pending);
+            self.trace.push(Event::BlockSend {
+                thread: tid,
+                endpoint: ep_id,
+            });
+            Outcome::Blocked
         }
     }
 
@@ -493,25 +619,26 @@ impl Kernel {
             .endpoints
             .get_mut(&ep_id)
             .and_then(|ep| ep.senders.pop_front());
-        match waiting_sender {
-            Some(sender) => {
-                let pending = self.threads.get_mut(&sender).unwrap().pending.take().expect(
-                    "a blocked sender always holds its pending message",
-                );
-                self.deliver(sender, tid, ep_id, pending, sender);
-                self.threads.get_mut(&tid).unwrap().pc += 1;
-                Outcome::Advanced
-            }
-            None => {
-                self.endpoints.get_mut(&ep_id).unwrap().receivers.push_back(tid);
-                let t = self.threads.get_mut(&tid).unwrap();
-                t.state = ThreadState::BlockedRecv(ep_id);
-                self.trace.push(Event::BlockRecv {
-                    thread: tid,
-                    endpoint: ep_id,
-                });
-                Outcome::Blocked
-            }
+        if let Some(sender) = waiting_sender {
+            let pending = self
+                .threads
+                .get_mut(&sender)
+                .unwrap()
+                .pending
+                .take()
+                .expect("a blocked sender always holds its pending message");
+            self.deliver(sender, tid, ep_id, pending, sender);
+            self.threads.get_mut(&tid).unwrap().pc += 1;
+            Outcome::Advanced
+        } else {
+            self.endpoints.get_mut(&ep_id).unwrap().receivers.push_back(tid);
+            let t = self.threads.get_mut(&tid).unwrap();
+            t.state = ThreadState::BlockedRecv(ep_id);
+            self.trace.push(Event::BlockRecv {
+                thread: tid,
+                endpoint: ep_id,
+            });
+            Outcome::Blocked
         }
     }
 
@@ -544,7 +671,7 @@ impl Kernel {
                 .get_mut(&receiver_task)
                 .unwrap()
                 .caps
-                .install(Capability::new(cap.object, cap.rights));
+                .install(Capability::new(cap.object, cap.rights), cap.id);
             self.trace.push(Event::CapTransfer {
                 from: sender_task,
                 to: receiver_task,
