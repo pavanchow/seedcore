@@ -2,11 +2,11 @@
 //!
 //! Seedcore never touches the operating system entropy pool. The whole point of
 //! the simulator is that a seed fully determines the run, so scheduling tie
-//! breaks and randomized scenarios are reproducible. This is SplitMix64, a well
+//! breaks and randomized scenarios are reproducible. This is `SplitMix64`, a well
 //! known small generator that is more than good enough for a simulation and is
 //! trivial to reason about.
 
-/// A seeded SplitMix64 generator.
+/// A seeded `SplitMix64` generator.
 #[derive(Debug, Clone)]
 pub struct Prng {
     state: u64,

@@ -49,6 +49,10 @@ impl Region {
     }
 
     /// Read one byte, bounds checked.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KernelError::OutOfBounds`] if `offset` is past the region end.
     pub fn read(&self, offset: usize) -> Result<u8, KernelError> {
         self.data.get(offset).copied().ok_or(KernelError::OutOfBounds {
             object: ObjectRef::Region(self.id),
@@ -58,6 +62,10 @@ impl Region {
     }
 
     /// Write one byte, bounds checked.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KernelError::OutOfBounds`] if `offset` is past the region end.
     pub fn write(&mut self, offset: usize, value: u8) -> Result<(), KernelError> {
         let len = self.data.len();
         match self.data.get_mut(offset) {

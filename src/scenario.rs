@@ -136,6 +136,51 @@ pub fn demo(seed: u64) -> Kernel {
     k
 }
 
+/// A clean producer and consumer pipeline, with no rogue task and no denials.
+///
+/// Each of `pairs` producers sends a burst of `burst` messages to its own
+/// consumer over a private endpoint. Half the pairs spawn the consumer first so
+/// it blocks waiting, half spawn the producer first, so both IPC arrival orders
+/// are exercised. Nothing here forges or misuses a capability, so a correct run
+/// records exactly `pairs * burst` rendezvous and zero denials. The IPC gate uses
+/// this to check exactly once delivery against an independently computed count.
+pub fn pipeline(seed: u64, pairs: u32, burst: u32) -> Kernel {
+    let mut k = Kernel::new(seed);
+    let pairs = pairs.max(1);
+    let burst = burst.max(1);
+
+    for pair in 0..pairs {
+        let producer = k.create_task(format!("producer-{pair}"));
+        let consumer = k.create_task(format!("consumer-{pair}"));
+        let ep = k.create_endpoint();
+
+        let p_send = k.grant(producer, ObjectRef::Endpoint(ep), Rights::SEND);
+        let c_recv = k.grant(consumer, ObjectRef::Endpoint(ep), Rights::RECV);
+
+        let mut prod = Vec::new();
+        let mut cons = Vec::new();
+        for i in 0..burst {
+            prod.push(Op::Send {
+                ep: p_send,
+                msg: MsgSpec::new(i as u64, vec![i as u8]),
+            });
+            cons.push(Op::Recv { ep: c_recv });
+        }
+        prod.push(Op::Exit);
+        cons.push(Op::Exit);
+
+        if (pair + seed as u32).is_multiple_of(2) {
+            k.spawn_thread(consumer, format!("consumer-{pair}"), 0, cons);
+            k.spawn_thread(producer, format!("producer-{pair}"), 0, prod);
+        } else {
+            k.spawn_thread(producer, format!("producer-{pair}"), 0, prod);
+            k.spawn_thread(consumer, format!("consumer-{pair}"), 0, cons);
+        }
+    }
+
+    k
+}
+
 /// A randomized producer and consumer stress scenario for the command line
 /// `run` mode and the fuzzing gates.
 ///
