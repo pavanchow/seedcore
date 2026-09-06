@@ -48,8 +48,10 @@ Three design choices make a capability unforgeable.
 
 Authority moves between tasks by explicit transfer inside a message, and only if
 the capability carries the grant right. The core removes the capability from the
-sender and installs it in the receiver. That is the sole path by which a task
-gains a capability it did not start with.
+sender and installs it in the receiver, preserving its identity so that later
+revocation still reaches it. That is one of two paths by which a task gains a
+capability it did not start with. The other is delegation by minting, described
+below.
 
 Every syscall resolves its target slot through one function that checks three
 things in order: the slot is present, the object is of the expected kind, and the
@@ -65,6 +67,41 @@ with the required right. Fabricated and revoked slots are always denied, and a
 read only capability never permits a write. The success condition is checked
 against an external model, not against the core's own answer, so the test cannot
 be satisfied by a core that simply agrees with itself.
+
+## Delegation and revocation, the derivation tree
+
+Grant creates authority from nothing at boot. Real systems also need a task to
+pass a weaker slice of its authority to another task, and later to take it all
+back at once. Seedcore models both with a capability derivation tree, the same
+idea as the seL4 capability derivation structure.
+
+Every capability carries a globally unique identity, separate from the slot and
+task that hold it. The identity is assigned by the core when the capability is
+minted and it never changes, not even when the capability moves to another task
+over IPC. The core keeps a tree that maps each identity to the identity it was
+derived from, or to nothing for a root created by a grant.
+
+Minting is delegation. A task asks the core to derive a child from a capability
+it holds, dropping some rights. The child names the same object but carries the
+source rights with the dropped mask removed, so authority can only ever narrow.
+There is no path by which a mint adds a right the source lacked, because the
+child rights are computed as the source rights minus a mask, and a mask can only
+clear bits.
+
+Revocation is transitive. Revoking a capability walks the tree from that
+identity, collects the whole subtree of descendants, and removes every matching
+capability from every task table in the system. Handing out a delegated
+capability therefore never costs the granter the ability to reclaim it, and a
+descendant that has since been delegated onward or transferred over IPC is still
+caught, because identity travels with the capability.
+
+Why gate 5 proves this. The derivation gate mints chains of children across
+tasks, transfers some, then revokes at the root and at interior nodes. It
+computes the doomed subtree in an independent shadow of the tree and asserts the
+core removed exactly that set, that ancestors and sibling subtrees survive, and
+that a minted capability never carries a right its parent lacked. Because the
+shadow computes descent on its own, a wrong subtree in the core is a visible
+disagreement.
 
 ## Synchronous IPC
 
@@ -124,6 +161,24 @@ two illegal moves that the core denies: it names a slot it never held, and it
 tries to send on a memory capability. None of these services is privileged. Each
 is an ordinary task reached only through an endpoint capability, which is exactly
 how a microkernel factors an operating system.
+
+## The bounded stress harness
+
+The per property gates each prove one claim in isolation. The stress harness
+proves they all hold together under sustained pressure. It drives the core from
+many seeds with a mixture of real, fabricated, revoked, minted, and cross task
+slots, occasionally granting fresh authority so the allowed path keeps firing,
+and it checks enforcement, isolation, IPC exactly once delivery, and determinism
+at once against the same independent shadow. It is the search for the failure the
+narrow gates might miss: a panic, an integer overflow, a hang, a lost or
+duplicated message, or an access that succeeds without the capability.
+
+The harness is deliberately bounded in footprint. Its work scales with
+`SEEDCORE_FUZZ_OPS` in time only. Nothing in it accumulates an unbounded
+structure, no growing string, no unbounded tree, so a large op budget never
+grows memory into swap. At a million ops it performs two million shadow
+comparisons in a single pass, roughly a quarter of them allowed and the rest
+denied, and every one agrees with the core.
 
 ## Determinism
 

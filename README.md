@@ -17,7 +17,8 @@ The core provides:
 1. Threads and a deterministic scheduler.
 2. Address spaces, so memory is private unless a capability says otherwise.
 3. Synchronous IPC, a blocking send and receive rendezvous over endpoints.
-4. Capabilities, unforgeable tokens that gate every access to every object.
+4. Capabilities, unforgeable tokens that gate every access to every object,
+   including delegation with reduced rights and transitive revocation.
 
 Everything else, a memory pager, a filesystem, a console driver, runs as an
 ordinary unprivileged task that answers IPC. The core does not know what a
@@ -49,6 +50,7 @@ isolation, not breadth of features.
 ```
 cargo run --bin seedcore -- demo
 cargo run --bin seedcore -- run --seed 42 --pairs 4 --burst 3
+cargo run --bin seedcore -- delegate
 cargo run --bin seedcore -- help
 ```
 
@@ -56,6 +58,11 @@ The `demo` command stands up a filesystem service and a console service, runs a
 client that reads a file over IPC and prints it, transfers a one shot reply
 capability inside the request, shares a memory region between the client and the
 filesystem, and then shows the core denying two unauthorized accesses.
+
+The `delegate` command shows capability delegation and transitive revocation. An
+owner delegates a region to an editor, the editor sub delegates a read only copy
+to a viewer, and revoking the editor capability cascades to the derived viewer
+copy while the owner keeps its own access.
 
 ## API
 
@@ -82,8 +89,9 @@ assert_eq!(report.rendezvous, 1);
 
 Core types:
 
-- `Kernel`: creates objects, mints capabilities with `grant`, spawns threads, and
-  runs the loop.
+- `Kernel`: creates objects, mints capabilities with `grant`, delegates weaker
+  copies with `mint`, revokes a whole derivation subtree with `revoke_tree`,
+  spawns threads, and runs the loop.
 - `ObjectRef`: an endpoint, a region, a thread, or a task.
 - `Rights`: `SEND`, `RECV`, `GRANT`, `READ`, `WRITE`, combined with `|`.
 - `Op`: one syscall level step in a thread program (`Compute`, `Send`, `Recv`,
@@ -93,8 +101,10 @@ Core types:
 
 ## The correctness gate
 
-Three properties are asserted over randomized, seeded, bounded scenarios, plus
-unit tests per module. Set `SEEDCORE_FUZZ_OPS` to raise the bounds.
+Five properties are asserted over randomized, seeded, bounded scenarios, plus
+unit tests per module. Every gate compares the kernel against an independent
+shadow model that decides what should happen without ever calling the kernel, so
+a pass is never vacuous. Set `SEEDCORE_FUZZ_OPS` to raise the bounds.
 
 1. Capability unforgeability and enforcement (`tests/capability.rs`). A syscall
    succeeds if and only if the caller holds a capability of the right kind with
@@ -108,13 +118,28 @@ unit tests per module. Set `SEEDCORE_FUZZ_OPS` to raise the bounds.
    touch only the regions it holds a capability for, a shared region genuinely
    carries data between tasks while outsiders are denied, and the same seed
    produces a byte identical trace.
+4. The bounded stress harness (`tests/stress.rs`). It drives the kernel from
+   many seeds with a mixture of real, fabricated, revoked, minted, and cross task
+   slots, and checks every enforcement, isolation, IPC exactly once, and
+   determinism claim at once against the shadow. It hunts for any panic,
+   overflow, hang, lost or duplicated message, or access granted without the
+   capability. The footprint is bounded, so a large op budget costs time, not
+   memory.
+5. The capability derivation tree (`tests/derivation.rs`). Minting never adds a
+   right the parent lacked, and revoking a capability removes exactly its
+   subtree, wherever the descendants live and however they travelled, while
+   everything outside the subtree is untouched. Descent is computed by the
+   shadow, so a wrong subtree in the kernel is a detectable disagreement.
 
 Run them:
 
 ```
 cargo test
-SEEDCORE_FUZZ_OPS=50000 cargo test
+SEEDCORE_FUZZ_OPS=1000000 cargo test
 ```
+
+At a million ops the auth harness runs two million shadow comparisons per pass,
+about a quarter allowed and the rest denied, with zero disagreement.
 
 ## Design
 
