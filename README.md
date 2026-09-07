@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="Seedcore logo" width="96">
+
 # Seedcore
 
 A deterministic microkernel simulator in pure Rust std, with capability based

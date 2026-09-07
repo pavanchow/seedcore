@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Seedcore playground</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
 :root {
   --bg: #f5f5f7;
@@ -165,6 +166,7 @@ footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4
 <div class="wrap">
 
   <header class="hero">
+    <img src="logo.svg" alt="Seedcore logo" width="72" height="72" style="display:block;margin:0 auto 16px">
     <h1>Seedcore</h1>
     <p class="tag">A deterministic microkernel, in your browser. A tiny core hands out threads, address spaces, synchronous IPC, and capabilities. Everything else is an unprivileged user space service.</p>
     <div class="links">
@@ -179,7 +181,8 @@ footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4
   </header>
 
   <section class="card how">
-    <h2>How to use this playground</h2>
+    <details>
+    <summary style="cursor:pointer;font-size:1.5em;font-weight:600;list-style-position:outside">How to use this playground</summary>
     <p class="sub">This is a faithful reimplementation of the Seedcore engine, small enough to read. The three boxes below are tasks. The filesystem and console are ordinary user space services. The app is a client. Watch what each is allowed to do, and what the core denies.</p>
     <ol>
       <li><b>Send a file request.</b> Press <code>Send file request</code>. The app sends a request to the filesystem service over its endpoint, handing it a one shot reply capability inside the message. The filesystem writes the file bytes into a region shared with the app, replies, and the app reads the bytes back. Watch the boxes light up, the shared memory fill, and the scheduler timeline grow.</li>
@@ -189,6 +192,7 @@ footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4
       <li><b>Reset</b> to start over. Everything here is deterministic, so the same buttons always produce the same trace.</li>
     </ol>
     <p class="sub" style="margin-top:16px"><b>Guided tour.</b> Start with <code>Send file request</code> and read the event log top to bottom. Notice the <span style="color:var(--grant);font-weight:600">cap transfer</span> line: that is the reply capability moving from the app into the filesystem. Then press <code>Try unauthorized access</code> and see that naming a slot is not the same as holding one. That single idea, that authority is a token you must hold and cannot forge, is the whole point of a capability microkernel.</p>
+    </details>
   </section>
 
   <section class="card">
