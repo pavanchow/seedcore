@@ -6,6 +6,7 @@
 <title>Seedcore: a deterministic capability microkernel simulator in Rust</title>
 <meta name="description" content="Seedcore by Pavan Nallamothu: a deterministic microkernel simulator in pure Rust std. A tiny core provides threads, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged user space service. Watch a client read a file over IPC, then watch the core deny an access no one granted.">
 <meta name="author" content="Pavan Nallamothu (pavanchow)">
+<meta name="keywords" content="microkernel, capability-based security, unforgeable capabilities, synchronous IPC, address space isolation, deterministic simulator, seL4, capability delegation, revocation, user space services, shadow model, Rust, Pavan Nallamothu, pavanchow">
 <link rel="canonical" href="https://pavanchow.github.io/seedcore/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="author" href="https://github.com/pavanchow">
@@ -17,7 +18,7 @@
 <meta name="twitter:title" content="Seedcore: a deterministic capability microkernel simulator in Rust">
 <meta name="twitter:description" content="Authority is a token you have to hold and cannot forge. Watch a capability microkernel enforce it, live.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Seedcore","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Seedcore is a deterministic microkernel simulator in pure Rust std with capability based isolation, synchronous IPC, and user space services. A tiny privileged core provides threads and a deterministic scheduler, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged task that answers IPC.","url":"https://pavanchow.github.io/seedcore/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/seedcore","license":"https://opensource.org/licenses/MIT"}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Seedcore","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Seedcore is a deterministic microkernel simulator in pure Rust std with capability based isolation, synchronous IPC, and user space services. A tiny privileged core provides threads and a deterministic scheduler, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged task that answers IPC.","url":"https://pavanchow.github.io/seedcore/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/seedcore","license":"https://opensource.org/licenses/MIT"}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
@@ -204,6 +205,23 @@ section.narr .lead { max-width: 680px; margin: 16px auto 0; text-align: center; 
 pre.term { background: #15161c; color: #ececf4; border-radius: 14px; padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; max-width: 760px; margin: 28px auto 0; }
 pre.term .cm { color: #8a8d9a; }
 pre.term .g { color: #7fd6a0; }
+nav .ver { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+@media (max-width: 640px) { nav .ver { display: none; } }
+
+.cmp { max-width: 820px; margin: 34px auto 0; }
+.cmp .r { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr; gap: 14px 38px; padding: 22px 0; border-top: 1px solid var(--line); text-align: left; }
+.cmp .r:first-child { border-top: none; }
+.cmp .r b { font-size: 17px; }
+.cmp .r.self b { color: var(--accent); }
+.cmp .r p { color: var(--muted); margin: 0; font-size: 15px; }
+@media (max-width: 640px) { .cmp .r { grid-template-columns: 1fr; gap: 6px; } }
+
+.pgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 900px; margin: 40px auto 0; text-align: left; }
+@media (max-width: 640px) { .pgrid { grid-template-columns: 1fr; } }
+.pcard { background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+.pcard h4 { font-family: var(--mono); font-size: 15px; margin: 0 0 8px; display: flex; align-items: center; gap: 10px; color: var(--text); text-transform: none; letter-spacing: normal; font-weight: 600; }
+.pcard p { color: var(--muted); font-size: 15px; margin: 0; }
+.ptag { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .04em; background: var(--accent-soft); color: var(--accent); }
 footer.site { padding: 60px 20px; border-top: 1px solid var(--line); text-align: center; color: var(--muted); margin-top: 20px; }
 footer.site .name { color: var(--text); font-weight: 600; }
 footer.site p + p { margin-top: 10px; }
@@ -221,9 +239,11 @@ footer.site p + p { margin-top: 10px; }
   <div class="brand"><img src="logo.svg" class="brandlogo" alt="" width="22" height="22">Seedcore</div>
   <div class="links">
     <a href="#sim">Playground</a>
-    <a href="#proof">Proof</a>
+    <a href="#differs">How it differs</a>
+    <a href="#primitives">Primitives</a>
     <a href="#use">Use it</a>
     <a class="gh" href="https://github.com/pavanchow/seedcore">GitHub</a>
+    <span class="ver">v0.1.0</span>
   </div>
 </div></nav>
 
@@ -300,8 +320,38 @@ SEEDCORE_FUZZ_OPS=1000000 cargo test</pre>
   <p class="lead" style="margin-top:26px">A syscall succeeds if and only if the caller holds a capability of the right kind with the right permission; fabricated, guessed, and revoked slots are always denied. Synchronous send and receive deliver every message exactly once, a transferred capability moves from sender to receiver and leaves the sender, and the same seed produces a byte identical trace. Minting never adds a right the parent lacked, and revoking a capability removes exactly its subtree, wherever the descendants travelled.</p>
 </div></section>
 
+<section id="differs" class="narr"><div class="wrap">
+  <h2>How it differs</h2>
+  <p class="lead">Real microkernels boot on hardware. Seedcore keeps only the idea that makes them interesting to a security engineer, the capability spine, and makes it small enough to read and to fuzz.</p>
+  <div class="cmp">
+    <div class="r"><b>seL4</b><p>A real, formally verified capability microkernel that runs on hardware. The gold standard for capability-based isolation, and a large, deep system to study end to end.</p></div>
+    <div class="r"><b>Mach, MINIX</b><p>Real microkernels. Mach pioneered the split of IPC and user space services; MINIX is a teaching microkernel that actually boots. Both carry the weight of real hardware and drivers.</p></div>
+    <div class="r self"><b>Seedcore</b><p>Not bootable, and honest about it. It models the microkernel philosophy directly in pure Rust std: threads, address spaces, synchronous IPC, and unforgeable capabilities, with everything else as an unprivileged user space service. Deterministic from a seed, small enough to read in an afternoon, and every property checked against an independent shadow model.</p></div>
+  </div>
+</div></section>
+
+<section id="primitives" class="narr"><div class="wrap">
+  <p class="eyebrow" style="text-align:center">The parts that matter</p>
+  <h2 style="margin-top:14px">The capability spine, in six pieces.</h2>
+  <p class="lead">Each is a real part of the core in <code>src</code>, and each has a gate in <code>tests</code> that pins it against the shadow model.</p>
+  <div class="pgrid">
+    <div class="pcard"><h4><span class="ptag">core</span> Threads and scheduler</h4><p>A deterministic dispatcher runs each thread's small program of syscall-level <code>Op</code> steps. The core interprets them, accounts for cost, and records every effect in a trace.</p></div>
+    <div class="pcard"><h4><span class="ptag">core</span> Address spaces</h4><p>Memory is private unless a capability says otherwise. A shared region genuinely carries data between the tasks that hold it, while outsiders are denied.</p></div>
+    <div class="pcard"><h4><span class="ptag">core</span> Synchronous IPC</h4><p>A blocking send and receive rendezvous over endpoints. Every message is delivered exactly once, with correct blocking semantics in either arrival order.</p></div>
+    <div class="pcard"><h4><span class="ptag">security</span> Unforgeable capabilities</h4><p>A task holds no ambient authority. It cannot name a file, a page, or another task without a capability, and it cannot forge one. Fabricated, guessed, and revoked slots are always denied.</p></div>
+    <div class="pcard"><h4><span class="ptag">security</span> Delegation and revocation</h4><p>Minting a copy never adds a right the parent lacked. Revoking a capability removes exactly its derivation subtree, wherever the descendants live and however they travelled.</p></div>
+    <div class="pcard"><h4><span class="ptag">proof</span> The shadow-model gate</h4><p>Every gate compares the kernel against an independent shadow model that decides what should happen without ever calling the kernel, so a pass is never vacuous.</p></div>
+  </div>
+</div></section>
+
 <section id="use" class="narr"><div class="wrap">
   <h2>Use it</h2>
+  <div class="cmp">
+    <div class="r"><b>CLI</b><p><code>seedcore demo</code> stands up filesystem and console services and reads a file over IPC, <code>run</code> drives a seeded randomized run, and <code>delegate</code> shows delegation and transitive revocation.</p></div>
+    <div class="r"><b>Library</b><p><code>seedcore::prelude</code>: a <code>Kernel</code> creates objects, mints capabilities with <code>grant</code> and <code>mint</code>, revokes a subtree with <code>revoke_tree</code>, spawns threads, and runs the loop into a <code>RunReport</code>.</p></div>
+    <div class="r"><b>Gates</b><p>Five shadow-checked properties over randomized, seeded, bounded scenarios: capability enforcement, IPC exactly once, isolation and determinism, a stress harness, and the derivation tree. Raise the bounds with <code>SEEDCORE_FUZZ_OPS</code>.</p></div>
+    <div class="r"><b>Determinism</b><p>The only inputs are the seed and the thread programs, so a run reproduces byte for byte. The same buttons in the playground always produce the same trace.</p></div>
+  </div>
   <pre class="term"><span class="cm"># stand up fs + console services, read a file over IPC, then two denials</span>
 cargo run --bin seedcore -- demo
 
