@@ -3,8 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Seedcore playground</title>
+<title>Seedcore: a deterministic capability microkernel simulator in Rust</title>
+<meta name="description" content="Seedcore by Pavan Nallamothu: a deterministic microkernel simulator in pure Rust std. A tiny core provides threads, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged user space service. Watch a client read a file over IPC, then watch the core deny an access no one granted.">
+<meta name="author" content="Pavan Nallamothu (pavanchow)">
+<link rel="canonical" href="https://pavanchow.github.io/seedcore/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="author" href="https://github.com/pavanchow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Seedcore: a deterministic capability microkernel simulator in Rust">
+<meta property="og:description" content="A deterministic microkernel in pure Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities. Everything else is an unprivileged user space service. By Pavan Nallamothu.">
+<meta property="og:url" content="https://pavanchow.github.io/seedcore/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Seedcore: a deterministic capability microkernel simulator in Rust">
+<meta name="twitter:description" content="Authority is a token you have to hold and cannot forge. Watch a capability microkernel enforce it, live.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Seedcore","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Seedcore is a deterministic microkernel simulator in pure Rust std with capability based isolation, synchronous IPC, and user space services. A tiny privileged core provides threads and a deterministic scheduler, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged task that answers IPC.","url":"https://pavanchow.github.io/seedcore/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/seedcore","license":"https://opensource.org/licenses/MIT"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+</script>
 <style>
 :root {
   --bg: #f5f5f7;
@@ -27,7 +44,7 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: var(--font);
@@ -58,17 +75,10 @@ body {
   }
   body { background: var(--bg); color: var(--text); }
 }
-.wrap { max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; }
-header.hero { text-align: center; padding: 24px 0 8px; }
-.hero h1 { font-size: 44px; letter-spacing: -0.02em; margin: 0 0 8px; font-weight: 700; }
-.hero p.tag { font-size: 20px; color: var(--muted); margin: 0 auto; max-width: 640px; }
-.hero .links { margin-top: 18px; }
-a.btn-link {
-  display: inline-block; text-decoration: none; color: var(--accent);
-  font-weight: 500; padding: 8px 16px; border: 1px solid var(--line);
-  border-radius: 980px; transition: background 0.2s;
-}
-a.btn-link:hover { background: var(--accent-soft); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+h2 { font-size: 26px; letter-spacing: -0.01em; margin: 0 0 4px; }
+h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 20px; }
 .pill {
   display: inline-block; font-size: 13px; color: var(--muted);
   background: var(--panel); border: 1px solid var(--line);
@@ -79,9 +89,12 @@ section.card {
   border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 26px; margin: 22px 0;
 }
-h2 { font-size: 26px; letter-spacing: -0.01em; margin: 0 0 4px; }
-h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
-.sub { color: var(--muted); margin: 0 0 20px; }
+a.btn-link {
+  display: inline-block; text-decoration: none; color: var(--accent);
+  font-weight: 500; padding: 8px 16px; border: 1px solid var(--line);
+  border-radius: 980px; transition: background 0.2s;
+}
+a.btn-link:hover { background: var(--accent-soft); }
 .controls { display: flex; flex-wrap: wrap; gap: 12px; }
 button.act {
   font-family: var(--font); font-size: 15px; font-weight: 500;
@@ -154,48 +167,99 @@ button.primary:hover:not(:disabled) { filter: brightness(1.06); }
 .how li { margin: 8px 0; }
 .how code { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+
+/* ===== cocoon-grade shell ===== */
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.82); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--line); }
+@media (prefers-color-scheme: dark) { nav { background: rgba(0,0,0,.72); } }
+nav .row { display: flex; justify-content: space-between; align-items: center; height: 56px; max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+nav .brand { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; color: var(--text); }
+nav .brand .gem { width: 16px; height: 16px; border-radius: 50% 50% 50% 50%/60% 60% 40% 40%; background: linear-gradient(135deg,#5ea9ff,#0071e3); }
+nav .links { display: flex; gap: 22px; align-items: center; }
+nav .links a { color: var(--text); font-size: 14.5px; text-decoration: none; }
+nav .links a:hover { color: var(--accent); text-decoration: none; }
+@media (max-width: 640px) { nav .links a:not(.gh) { display: none; } }
+
+.hero { text-align: center; padding: 80px 20px 20px; }
+.hero img { display: block; margin: 0 auto 18px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.hero h1 { font-size: clamp(38px, 6.6vw, 60px); line-height: 1.06; letter-spacing: -.035em; font-weight: 700; margin: 16px 0 0; text-wrap: balance; }
+.hero p.sub { max-width: 680px; margin: 22px auto 0; font-size: clamp(17px, 2.1vw, 21px); color: var(--muted); }
+.cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 30px 0 6px; }
+.btn { display: inline-block; padding: 12px 26px; border-radius: 999px; font-size: 15px; font-weight: 600; border: 1px solid var(--text); color: var(--text); text-decoration: none; }
+.btn:hover { opacity: .72; text-decoration: none; }
+.btn.primary { background: var(--text); color: var(--panel); border-color: var(--text); }
+
+.howto { max-width: 720px; margin: 8px auto 0; border: 1px solid var(--line); border-radius: 14px; padding: 2px 20px; background: var(--panel-2); }
+.howto > summary { cursor: pointer; font-weight: 600; padding: 15px 0; list-style: none; }
+.howto > summary::-webkit-details-marker { display: none; }
+.howto > summary::before { content: "\25B8"; display: inline-block; margin-right: 8px; color: var(--accent); transition: transform .15s; }
+.howto[open] > summary::before { transform: rotate(90deg); }
+.howto .sub { margin: 4px 0 14px; }
+
+section.narr { border-top: 1px solid var(--line); padding: 70px 0; margin-top: 40px; }
+section.narr h2 { font-size: clamp(25px, 4.2vw, 35px); line-height: 1.14; letter-spacing: -.025em; font-weight: 660; text-align: center; max-width: 760px; margin: 0 auto; }
+section.narr .lead { max-width: 680px; margin: 16px auto 0; text-align: center; color: var(--muted); font-size: 16px; }
+pre.term { background: #15161c; color: #ececf4; border-radius: 14px; padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; max-width: 760px; margin: 28px auto 0; }
+pre.term .cm { color: #8a8d9a; }
+pre.term .g { color: #7fd6a0; }
+footer.site { padding: 60px 20px; border-top: 1px solid var(--line); text-align: center; color: var(--muted); margin-top: 20px; }
+footer.site .name { color: var(--text); font-weight: 600; }
+footer.site p + p { margin-top: 10px; }
 @media (max-width: 820px) {
   .stage { grid-template-columns: 1fr; }
   .grid2 { grid-template-columns: 1fr; }
-  .hero h1 { font-size: 34px; }
 }
+@media (max-width: 640px) { .hero { padding: 56px 20px 18px; } section.narr { padding: 54px 0; } }
 </style>
 </head>
 <body>
+<noscript><div class="wrap" style="padding:40px 20px;color:#6e6e73">Seedcore is a deterministic microkernel simulator in pure Rust std by Pavan Nallamothu, with capability based isolation, synchronous IPC, and user space services. A tiny privileged core provides threads, address spaces, IPC, and unforgeable capabilities; everything else runs as an unprivileged task that answers IPC. Source: <a href="https://github.com/pavanchow/seedcore">github.com/pavanchow/seedcore</a>.</div></noscript>
+
+<nav><div class="row">
+  <div class="brand"><span class="gem"></span>Seedcore</div>
+  <div class="links">
+    <a href="#sim">Playground</a>
+    <a href="#proof">Proof</a>
+    <a href="#use">Use it</a>
+    <a class="gh" href="https://github.com/pavanchow/seedcore">GitHub</a>
+  </div>
+</div></nav>
+
+<div class="hero">
+  <img src="logo.svg" alt="Seedcore logo" width="72" height="72">
+  <p class="eyebrow">Rust &middot; capability microkernel</p>
+  <h1>Authority is a token<br>you have to hold.</h1>
+  <p class="sub">Seedcore is a deterministic microkernel simulator in pure Rust. A tiny privileged core provides only four things, threads and a scheduler, address spaces, synchronous IPC, and unforgeable capabilities, and everything else, the filesystem and the console, runs as an ordinary unprivileged user space service. Press a button below to watch a client read a file entirely over IPC, then watch the core deny an access no one ever granted.</p>
+  <div class="cta-row">
+    <a class="btn primary" href="#sim">Open the playground</a>
+    <a class="btn" href="https://github.com/pavanchow/seedcore">View on GitHub</a>
+  </div>
+  <div>
+    <span class="pill">capability based isolation</span>
+    <span class="pill">synchronous IPC</span>
+    <span class="pill">user space services</span>
+    <span class="pill">teaching accurate model</span>
+  </div>
+</div>
+
+<details class="howto how">
+  <summary>How to use this playground</summary>
+  <p class="sub">This is a faithful reimplementation of the Seedcore engine, small enough to read. The three boxes below are tasks. The filesystem and console are ordinary user space services. The app is a client. Watch what each is allowed to do, and what the core denies.</p>
+  <ol>
+    <li><b>Send a file request.</b> Press <code>Send file request</code>. The app sends a request to the filesystem service over its endpoint, handing it a one shot reply capability inside the message. The filesystem writes the file bytes into a region shared with the app, replies, and the app reads the bytes back. Watch the boxes light up, the shared memory fill, and the scheduler timeline grow.</li>
+    <li><b>Try an unauthorized access.</b> Press <code>Try unauthorized access</code>. The app names a capability slot it was never granted. There is no such capability, so the core denies it. The denial appears in red and the app box flashes red.</li>
+    <li><b>Try a type confusion.</b> Press <code>Send on a memory capability</code>. The app tries to send a message using a memory capability where an endpoint is required. The core refuses the wrong object kind.</li>
+    <li><b>Read the state.</b> Each box lists its capability tokens as <code>slot: object [rights]</code>. A capability transferred over IPC appears highlighted in the receiver. The shared region shows which tasks can see it.</li>
+    <li><b>Reset</b> to start over. Everything here is deterministic, so the same buttons always produce the same trace.</li>
+  </ol>
+  <p class="sub" style="margin-top:16px"><b>Guided tour.</b> Start with <code>Send file request</code> and read the event log top to bottom. Notice the <span style="color:var(--grant);font-weight:600">cap transfer</span> line: that is the reply capability moving from the app into the filesystem. Then press <code>Try unauthorized access</code> and see that naming a slot is not the same as holding one. That single idea, that authority is a token you must hold and cannot forge, is the whole point of a capability microkernel.</p>
+</details>
+
 <div class="wrap">
 
-  <header class="hero">
-    <img src="logo.svg" alt="Seedcore logo" width="72" height="72" style="display:block;margin:0 auto 16px">
-    <h1>Seedcore</h1>
-    <p class="tag">A deterministic microkernel, in your browser. A tiny core hands out threads, address spaces, synchronous IPC, and capabilities. Everything else is an unprivileged user space service.</p>
-    <div class="links">
-      <a class="btn-link" href="https://github.com/pavanchow/seedcore">View the repository</a>
-    </div>
-    <div>
-      <span class="pill">capability based isolation</span>
-      <span class="pill">synchronous IPC</span>
-      <span class="pill">user space services</span>
-      <span class="pill">teaching accurate model</span>
-    </div>
-  </header>
-
-  <section class="card how">
-    <details>
-    <summary style="cursor:pointer;font-size:1.5em;font-weight:600;list-style-position:outside">How to use this playground</summary>
-    <p class="sub">This is a faithful reimplementation of the Seedcore engine, small enough to read. The three boxes below are tasks. The filesystem and console are ordinary user space services. The app is a client. Watch what each is allowed to do, and what the core denies.</p>
-    <ol>
-      <li><b>Send a file request.</b> Press <code>Send file request</code>. The app sends a request to the filesystem service over its endpoint, handing it a one shot reply capability inside the message. The filesystem writes the file bytes into a region shared with the app, replies, and the app reads the bytes back. Watch the boxes light up, the shared memory fill, and the scheduler timeline grow.</li>
-      <li><b>Try an unauthorized access.</b> Press <code>Try unauthorized access</code>. The app names a capability slot it was never granted. There is no such capability, so the core denies it. The denial appears in red and the app box flashes red.</li>
-      <li><b>Try a type confusion.</b> Press <code>Send on a memory capability</code>. The app tries to send a message using a memory capability where an endpoint is required. The core refuses the wrong object kind.</li>
-      <li><b>Read the state.</b> Each box lists its capability tokens as <code>slot: object [rights]</code>. A capability transferred over IPC appears highlighted in the receiver. The shared region shows which tasks can see it.</li>
-      <li><b>Reset</b> to start over. Everything here is deterministic, so the same buttons always produce the same trace.</li>
-    </ol>
-    <p class="sub" style="margin-top:16px"><b>Guided tour.</b> Start with <code>Send file request</code> and read the event log top to bottom. Notice the <span style="color:var(--grant);font-weight:600">cap transfer</span> line: that is the reply capability moving from the app into the filesystem. Then press <code>Try unauthorized access</code> and see that naming a slot is not the same as holding one. That single idea, that authority is a token you must hold and cannot forge, is the whole point of a capability microkernel.</p>
-    </details>
-  </section>
-
-  <section class="card">
+  <section class="card" id="sim">
     <h2>The system</h2>
     <p class="sub">Three tasks, their capabilities, and their address spaces.</p>
     <div class="controls" style="margin-bottom:20px">
@@ -220,12 +284,40 @@ footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 4
     </section>
   </div>
 
-  <footer>
-    Seedcore is a teaching accurate microkernel simulator, not a bootable kernel. Source and the full Rust engine at
-    <a class="btn-link" style="padding:2px 10px" href="https://github.com/pavanchow/seedcore">github.com/pavanchow/seedcore</a>
-  </footer>
-
 </div>
+
+<section id="proof" class="narr"><div class="wrap">
+  <h2>Every run is checked against a shadow model</h2>
+  <p class="lead">Five properties are asserted over randomized, seeded, bounded scenarios, plus unit tests per module. Every gate compares the kernel against an independent shadow model that decides what should happen without ever calling the kernel, so a pass is never vacuous.</p>
+  <pre class="term"><span class="cm"># five gates: capability enforcement, IPC exactly once, address space</span>
+<span class="cm"># isolation and determinism, a bounded stress harness, and the</span>
+<span class="cm"># capability derivation tree, each compared to the shadow model</span>
+cargo test
+
+<span class="cm"># raise the bounds. at a million ops the auth harness runs about</span>
+<span class="cm"># two million shadow comparisons per pass, with zero disagreement</span>
+SEEDCORE_FUZZ_OPS=1000000 cargo test</pre>
+  <p class="lead" style="margin-top:26px">A syscall succeeds if and only if the caller holds a capability of the right kind with the right permission; fabricated, guessed, and revoked slots are always denied. Synchronous send and receive deliver every message exactly once, a transferred capability moves from sender to receiver and leaves the sender, and the same seed produces a byte identical trace. Minting never adds a right the parent lacked, and revoking a capability removes exactly its subtree, wherever the descendants travelled.</p>
+</div></section>
+
+<section id="use" class="narr"><div class="wrap">
+  <h2>Use it</h2>
+  <pre class="term"><span class="cm"># stand up fs + console services, read a file over IPC, then two denials</span>
+cargo run --bin seedcore -- demo
+
+<span class="cm"># a seeded, randomized run</span>
+cargo run --bin seedcore -- run --seed 42 --pairs 4 --burst 3
+
+<span class="cm"># capability delegation and transitive revocation</span>
+cargo run --bin seedcore -- delegate
+
+cargo run --bin seedcore -- help</pre>
+</div></section>
+
+<footer class="site">
+  <p>Seedcore is MIT licensed. It is a teaching accurate microkernel simulator, not a bootable kernel. Source, tests, and design notes are on <a href="https://github.com/pavanchow/seedcore">GitHub</a>.</p>
+  <p>By <span class="name">Pavan Nallamothu</span>.</p>
+</footer>
 
 <script>
 "use strict";
