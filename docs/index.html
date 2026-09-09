@@ -1,27 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Seedcore: a deterministic capability microkernel simulator in Rust</title>
-<meta name="description" content="Seedcore by Pavan Nallamothu: a deterministic microkernel simulator in pure Rust std. A tiny core provides threads, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged user space service. Watch a client read a file over IPC, then watch the core deny an access no one granted.">
-<meta name="author" content="Pavan Nallamothu (pavanchow)">
-<meta name="keywords" content="microkernel, capability-based security, unforgeable capabilities, synchronous IPC, address space isolation, deterministic simulator, seL4, capability delegation, revocation, user space services, shadow model, Rust, Pavan Nallamothu, pavanchow">
-<link rel="canonical" href="https://pavanchow.github.io/seedcore/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
+<title>Seedcore: a capability microkernel in Rust | Pavan Nallamothu</title>
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<meta name="description" content="Seedcore is a deterministic capability based microkernel in Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities, by Pavan Nallamothu.">
+<meta name="keywords" content="microkernel rust, capability based security, unforgeable capabilities, synchronous IPC, address space isolation, microkernel simulator, seL4 style microkernel, capability delegation, capability revocation, user space services, deterministic kernel, Seedcore, Pavan Nallamothu, pavanchow">
+<meta name="author" content="Pavan Nallamothu">
 <link rel="author" href="https://github.com/pavanchow">
+<link rel="canonical" href="https://pavanchow.github.io/seedcore/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Seedcore: a deterministic capability microkernel simulator in Rust">
-<meta property="og:description" content="A deterministic microkernel in pure Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities. Everything else is an unprivileged user space service. By Pavan Nallamothu.">
+<meta property="og:site_name" content="Pavan Nallamothu">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Seedcore: a capability microkernel in Rust | Pavan Nallamothu">
+<meta property="og:description" content="Seedcore is a deterministic capability based microkernel in Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities, by Pavan Nallamothu.">
 <meta property="og:url" content="https://pavanchow.github.io/seedcore/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Seedcore: a deterministic capability microkernel simulator in Rust">
-<meta name="twitter:description" content="Authority is a token you have to hold and cannot forge. Watch a capability microkernel enforce it, live.">
+<meta property="og:image" content="https://pavanchow.github.io/seedcore/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Seedcore by Pavan Nallamothu">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Seedcore: a capability microkernel in Rust | Pavan Nallamothu">
+<meta name="twitter:description" content="Seedcore is a deterministic capability based microkernel in Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities, by Pavan Nallamothu.">
+<meta name="twitter:image" content="https://pavanchow.github.io/seedcore/og-image.png">
+<meta name="twitter:image:alt" content="Seedcore by Pavan Nallamothu">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Seedcore","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Seedcore is a deterministic microkernel simulator in pure Rust std with capability based isolation, synchronous IPC, and user space services. A tiny privileged core provides threads and a deterministic scheduler, address spaces, synchronous IPC, and unforgeable capabilities; everything else runs as an unprivileged task that answers IPC.","url":"https://pavanchow.github.io/seedcore/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/seedcore","license":"https://opensource.org/licenses/MIT"}
-</script>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","@id":"https://pavanchow.github.io/seedcore/#software","name":"Seedcore","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","description":"Seedcore is a deterministic capability based microkernel in Rust: threads, address spaces, synchronous IPC, and unforgeable capabilities, by Pavan Nallamothu.","url":"https://pavanchow.github.io/seedcore/","image":"https://pavanchow.github.io/seedcore/og-image.png","softwareVersion":"0.1.0","programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/seedcore","datePublished":"2026-08-21","author":{"@id":"https://github.com/pavanchow#person"},"publisher":{"@id":"https://github.com/pavanchow#person"},"keywords":"microkernel rust, capability based security, unforgeable capabilities, synchronous IPC, address space isolation, microkernel simulator, seL4 style microkernel, capability delegation, capability revocation, user space services, deterministic kernel, Seedcore, Pavan Nallamothu, pavanchow","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Threads and a deterministic scheduler","Address space isolation","Synchronous IPC","Unforgeable capabilities","Capability delegation and revocation","User space services"],"license":"https://opensource.org/licenses/MIT"},{"@type":"Person","@id":"https://github.com/pavanchow#person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","jobTitle":"Software Engineer and Security Researcher","knowsAbout":["Rust","operating systems","microkernels","capability-based security","inter-process communication","systems programming","seL4"],"sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]},{"@type":"WebSite","@id":"https://pavanchow.github.io/seedcore/#website","name":"Seedcore by Pavan Nallamothu","url":"https://pavanchow.github.io/seedcore/","author":{"@id":"https://github.com/pavanchow#person"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Pavan Nallamothu","item":"https://github.com/pavanchow"},{"@type":"ListItem","position":2,"name":"Seedcore","item":"https://pavanchow.github.io/seedcore/"}]},{"@type":"WebPage","@id":"https://pavanchow.github.io/seedcore/#webpage","url":"https://pavanchow.github.io/seedcore/","name":"Seedcore: a capability microkernel in Rust | Pavan Nallamothu","isPartOf":{"@id":"https://pavanchow.github.io/seedcore/#website"},"about":{"@id":"https://pavanchow.github.io/seedcore/#software"},"author":{"@id":"https://github.com/pavanchow#person"},"inLanguage":"en"}]}
 </script>
 <style>
 :root {
@@ -367,6 +373,7 @@ cargo run --bin seedcore -- help</pre>
 <footer class="site">
   <p>Seedcore is MIT licensed. It is a teaching accurate microkernel simulator, not a bootable kernel. Source, tests, and design notes are on <a href="https://github.com/pavanchow/seedcore">GitHub</a>.</p>
   <p>By <span class="name">Pavan Nallamothu</span>.</p>
+<nav class="more-tools" aria-label="More open-source tools by Pavan Nallamothu" style="max-width:820px;margin:40px auto 0;padding-top:28px;border-top:1px solid rgba(128,128,128,.2);font-size:14px;line-height:2;text-align:center"><div style="font-weight:600;margin-bottom:8px">More open-source tools by Pavan Nallamothu</div><div><a href="https://pavanchow.github.io/bedrock/">Bedrock, a virtual CPU and OS kernel</a> &middot; <a href="https://pavanchow.github.io/aurora/">Aurora, an amnesic aarch64 kernel</a> &middot; <a href="https://pavanchow.github.io/nesthost/">Nesthost, a type-1 hypervisor simulator</a> &middot; <a href="https://pavanchow.github.io/cocoon/">Cocoon, a rootless container runtime</a> &middot; <a href="https://pavanchow.github.io/chronos/">Chronos, a CPU scheduler</a> &middot; <a href="https://pavanchow.github.io/terrarium/">Terrarium, a scripting sandbox</a> &middot; <a href="https://github.com/pavanchow">All tools on github.com/pavanchow</a></div></nav>
 </footer>
 
 <script>
