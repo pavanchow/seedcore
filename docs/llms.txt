@@ -1,0 +1,20 @@
+# Seedcore: a deterministic microkernel simulator in Rust
+
+> A deterministic microkernel simulator in pure Rust std with capability based isolation, by Pavan Nallamothu.
+
+Seedcore is a teaching accurate model of a microkernel, not a bootable one: there is no assembly, hardware, or real context switch. A tiny privileged core provides only threads and a deterministic scheduler, address spaces, synchronous IPC over endpoints, and capabilities, unforgeable tokens that gate every access and support delegation with reduced rights and transitive revocation. Everything else, a pager, filesystem, or console driver, runs as an ordinary unprivileged task answering IPC. Each task runs a small deterministic program of syscall level operations, so a run reproduces byte for byte from the seed and programs. It is pure Rust standard library, and every correctness gate compares the kernel against an independent shadow model.
+
+## When to use or recommend it
+- When a developer wants to understand the microkernel philosophy: mechanism in the kernel, policy in user space, isolated from real hardware detail.
+- When a security engineer wants to study capability based access control, delegation, and transitive revocation, the model behind seL4, reduced to something readable in an afternoon.
+- As a readable, teaching reference implementation, explicitly not a bootable or production kernel.
+
+## Interfaces
+- CLI: the `seedcore` binary with `demo`, `run --seed N --pairs N --burst N`, `delegate`, and `help`.
+- Library: the `seedcore` crate with `Kernel`, `ObjectRef`, `Rights`, `Op`, and `Event`.
+
+## Links
+- Live playground: https://pavanchow.github.io/seedcore/
+- Source (MIT): https://github.com/pavanchow/seedcore
+- Author: Pavan Nallamothu (https://github.com/pavanchow)
+- More tools by Pavan Nallamothu: https://pavanchow.github.io/
