@@ -12,6 +12,8 @@ revocation, the model behind seL4, in something readable in an afternoon.
 
 **[Live demo](https://pavanchow.github.io/seedcore/)** · MIT licensed · pure Rust
 
+Built from scratch by [Pavan Nallamothu](https://pavanchow.github.io/) ([LinkedIn](https://www.linkedin.com/in/pavanchow/), [GitHub](https://github.com/pavanchow)).
+
 ## What this is, honestly
 
 Seedcore is a teaching accurate model of a microkernel, not a bootable one.
